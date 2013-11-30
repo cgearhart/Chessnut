@@ -248,7 +248,7 @@ class Game(object):
                     break
 
             # Test en passant exception for pawn
-            if sym == 'p' and del_x != 0:
+            if sym == 'p' and del_x != 0 and not tgt_owner:
                 ep_coords = self.state.en_passant
                 if ep_coords == '-' or end != Game.xy2i(ep_coords):
                     break

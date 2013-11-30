@@ -57,7 +57,7 @@ class GameTest(unittest.TestCase):
         self.game = Game(fen=fen)
         self.game.apply_move('a7a8q')
         self.assertEqual(str(self.game), 'Q2qk1b1/8/8/8/8/8/7P/4K3 b - - 0 1')
-        
+
         # apply moves
         self.game.apply_move('g8h7')
         self.assertEqual(str(self.game), 'Q2qk3/7b/8/8/8/8/7P/4K3 w - - 1 2')
@@ -99,6 +99,13 @@ class GameTest(unittest.TestCase):
         self.game.apply_move('d4e3')
         new_fen = 'rnbqkbnr/ppp1pppp/8/8/8/4p3/PPPP1PPP/RNBQKBNR w KQkq - 0 2'
         self.assertEqual(str(self.game), new_fen)
+
+        # capture
+        fen = 'r2q1rk1/pppbbppp/2n5/3p4/3PN3/4PN2/1PPBBPPP/R2Q1RK1 b - - 0 9'
+        self.game = Game(fen=fen)
+        self.game.apply_move('d5e4')
+        n_fen = 'r2q1rk1/pppbbppp/2n5/8/3Pp3/4PN2/1PPBBPPP/R2Q1RK1 w - - 0 10'
+        self.assertEqual(str(self.game), n_fen)
 
         # invalid move
         self.game.reset()
