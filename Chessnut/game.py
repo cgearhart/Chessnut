@@ -108,7 +108,8 @@ class Game(object):
         target = self.board.get_piece(end)
 
         if self.validate and move not in self.get_moves(idx_list=[start]):
-            raise InvalidMove("Illegal move: {}".format(move))
+            raise InvalidMove("\nIllegal move: {}\nfen: {}".format(move,
+                                                                   str(self)))
 
         # toggle the active player
         if self.state.player == 'w':
@@ -260,7 +261,7 @@ class Game(object):
                 break
 
             # Pawn promotions should list all possible promotions
-            if piece.lower() == 'p' and (end < 8 or end > 56):
+            if piece.lower() == 'p' and (end < 8 or end > 55):
                 move = [move[0] + s for s in ['b', 'n', 'r', 'q']]
 
             res_moves.extend(move)
