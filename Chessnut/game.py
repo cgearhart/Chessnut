@@ -192,7 +192,7 @@ class Game(object):
                      and test_board.board.get_owner(x) == self.state.player]
 
             tgts = set([m[2:4] for m in test_board.get_moves()])
-            if k_idx[0] not in tgts:
+            if k_idx and k_idx[0] not in tgts:
                 res_moves.append(move)
         return res_moves
 
