@@ -50,6 +50,8 @@ class Game(object):
         the validity of moves returned by `get_moves()`.
         """
         self.validate = validate
+        self.reset()
+        self.fen_history = []
         self.set_fen(fen)
 
     def __str__(self):

@@ -34,13 +34,19 @@ class GameTest(unittest.TestCase):
         self.assertEqual(str(self.game), START_POS)
 
     def test_fen_history(self):
-        #
         self.game.reset()
         self.assertEqual(self.game.fen_history, [START_POS])
         self.game.apply_move('e2e4')
         hist = [START_POS,
                 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1']
         self.assertEqual(self.game.fen_history, hist)
+
+    def test_move_history(self):
+        self.game = None
+        self.game = Game()
+        self.assertEqual(self.game.move_history, [])
+        self.game.apply_move('e2e4')
+        self.assertEqual(self.game.move_history, ['e2e4'])
 
     def test_get_moves(self):
         #
