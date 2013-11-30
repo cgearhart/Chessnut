@@ -50,9 +50,7 @@ class Game(object):
         the validity of moves returned by `get_moves()`.
         """
         self.validate = validate
-        self.reset()
-        self.fen_history = []
-        self.set_fen(fen)
+        self.reset(fen=fen)
 
     def __str__(self):
         """Return the current FEN representation of the game."""
@@ -85,14 +83,14 @@ class Game(object):
         self.board = Board(position=fields[0])
         self.state = State(*fields[1:])
 
-    def reset(self):
+    def reset(self, fen=default_fen):
         """
         Clear the game history and set the board to the default starting
         position.
         """
         self.move_history = []
         self.fen_history = []
-        self.set_fen(self.default_fen)
+        self.set_fen(fen)
 
     def apply_move(self, move):
         """
