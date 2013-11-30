@@ -176,13 +176,14 @@ class Game(object):
         index. If no player is provided, it uses the currently active player.
         If no index is provided, it finds all legal moves for the player.
         """
-        res_moves = []
-        test_board = Game(fen=str(self), validate=False)
-
         if not self.validate:
             return self._all_moves(player=player, idx_list=idx_list)
 
+        res_moves = []
+        test_board = Game(fen=str(self), validate=False)
+
         for move in self._all_moves(player=player, idx_list=idx_list):
+            test_board.reset(fen=str(self))
             test_board.apply_move(move)
 
             # a move is legal unless the opponent can attack the king at the
@@ -192,7 +193,8 @@ class Game(object):
                      and test_board.board.get_owner(x) == self.state.player]
 
             tgts = set([m[2:4] for m in test_board.get_moves()])
-            if k_idx and k_idx[0] not in tgts:
+
+            if Game.i2xy(k_idx[0]) not in tgts:
                 res_moves.append(move)
         return res_moves
 
@@ -262,4 +264,8 @@ class Game(object):
                 move = [move[0] + s for s in ['b', 'n', 'r', 'q']]
 
             res_moves.extend(move)
+
+            # Cannot continue beyond capturing an enemy piece
+            if tgt_owner:
+                break
         return res_moves
