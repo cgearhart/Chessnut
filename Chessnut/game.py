@@ -38,10 +38,6 @@ class Game(object):
     """
 
     default_fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-    board = None
-    state = None
-    move_history = []
-    fen_history = []
 
     def __init__(self, fen=default_fen, validate=True):
         """
@@ -49,8 +45,12 @@ class Game(object):
         starting state if none is supplied), and determine whether to check
         the validity of moves returned by `get_moves()`.
         """
+        self.board = Board()
+        self.state = State(' ', ' ', ' ', ' ', ' ')
+        self.move_history = []
+        self.fen_history = []
         self.validate = validate
-        self.reset(fen=fen)
+        self.set_fen(fen=fen)
 
     def __str__(self):
         """Return the current FEN representation of the game."""
@@ -80,8 +80,8 @@ class Game(object):
         fields = fen.split(' ')
         fields[4] = int(fields[4])
         fields[5] = int(fields[5])
-        self.board = Board(position=fields[0])
         self.state = State(*fields[1:])
+        self.board.set_position(fields[0])
 
     def reset(self, fen=default_fen):
         """
@@ -92,8 +92,23 @@ class Game(object):
         self.fen_history = []
         self.set_fen(fen)
 
+    # def _translate(self, move):
+        # """
+        # Translate FEN castling notation to simple algebraic move notation.
+        # """
+        # if move == 'O-O':
+        #     move = 'e1g1' if self.state.player == 'w' else 'e8g8'
+        # elif move == 'O-O-O':
+        #     move = 'e1c1' if self.state.player == 'w' else 'e8c8'
+        # return move
+
     def apply_move(self, move):
         """
+        Take a move in simple algebraic notation and apply it to the game.
+        Note that simple algebraic notation differs from FEN move notation
+        in that castling is not given any special notation, and pawn promotion
+        piece is always lowercase.
+
         Update the state information (player, castling rights, en passant
         target, ply, and turn), apply the move to the game board, and
         update the game history.
@@ -101,6 +116,7 @@ class Game(object):
 
         # declare the status fields using default parameters
         fields = ['w', 'KQkq', '-', 0, 1]
+        # move = self._translate(move)
 
         start = Game.xy2i(move[:2])
         end = Game.xy2i(move[2:4])
@@ -172,17 +188,22 @@ class Game(object):
 
     def get_moves(self, player=None, idx_list=xrange(64)):
         """
-        Find the set of legal moves (i.e., moves that abide all the rules of
-        standard chess) for the specified player at the specified starting
-        index. If no player is provided, it uses the currently active player.
-        If no index is provided, it finds all legal moves for the player.
+        Get a list containing the legal moves for pieces owned by the
+        specified player that are located at positions included in the
+        idx_list. By default, it compiles the list for the active player
+        (i.e., self.state.player) by filtering the list of _all_moves() to
+        eliminate any that would expose the player's king to check.
         """
         if not self.validate:
             return self._all_moves(player=player, idx_list=idx_list)
 
         res_moves = []
-        test_board = Game(fen=str(self), validate=False)
 
+        # This is the most inefficient part of the model - there is no cache
+        # for previously computed move lists, so creating a new test board
+        # each time and applying the moves incurs high overhead, and throws
+        # away the result at the end of each pass through the loop
+        test_board = Game(fen=str(self), validate=False)
         for move in self._all_moves(player=player, idx_list=idx_list):
             test_board.reset(fen=str(self))
             test_board.apply_move(move)
@@ -201,16 +222,19 @@ class Game(object):
 
     def _all_moves(self, player=None, idx_list=xrange(64)):
         """
-        Find all moves for the given player at the specified starting index.
-        _all_moves() differs from get_moves in that it performs no validation
-        on the legality of the moves returned - so _all_moves() can return
-        moves that would leave the player in check.
+        Get a list containing all legal moves for pieces owned by the
+        specified player (including moves that would expose the player's king
+        to check) that are located at positions included in the idx_list. By
+        default, it compiles the list for the active player (i.e.,
+        self.state.player) by checking every square on the board.
         """
         res_moves = []
         for start in idx_list:
             if self.board.get_owner(start) != (player or self.state.player):
                 continue
 
+            # MOVES contains the list of all possible moves for a piece of
+            # the specified type on an empty chess board.
             piece = self.board.get_piece(start)
             rays = MOVES.get(piece, [''] * 64)
 
@@ -224,9 +248,17 @@ class Game(object):
 
     def _trace_ray(self, start, piece, ray):
         """
-        Trace along the rays for the specified piece and starting location,
-        and validate that the piece can legally move there (do not validate
-        whether the move would result in check).
+        Return a list of moves by filtering the supplied ray (a list of
+        indices corresponding to end points that lie on a common line from
+        the starting index) based on the state of the chess board (e.g.,
+        castling, capturing, en passant, etc.). Moves are in simple algebraic
+        notation, e.g., 'a2a4', 'g7h8q', etc.
+
+        Each ray should be an element from Chessnut.MOVES, representing all
+        the moves that a piece could make from the starting square on an
+        otherwise blank chessboard. This function filters the moves in a ray
+        by enforcing the rules of chess for the legality of capturing pieces,
+        castling, en passant, and pawn promotion.
         """
         res_moves = []
 
@@ -243,9 +275,11 @@ class Game(object):
 
             # Test castling exception for king
             if sym == 'k' and del_x == 2:
-                mid_p = self.board.get_piece((start + end) // 2).isspace()
+                gap_owner = self.board.get_owner((start + end) // 2)
+                out_owner = self.board.get_owner(end - 1)
                 rights = {62: 'K', 58: 'Q', 6: 'k', 2: 'q'}.get(end, ' ')
-                if tgt_owner or not mid_p or rights not in self.state.rights:
+                if (tgt_owner or gap_owner or rights not in self.state.rights
+                        or (rights.lower() == 'q' and out_owner)):
                     # Abort castling because missing castling rights
                     # or piece in the way
                     break

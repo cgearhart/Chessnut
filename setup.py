@@ -6,7 +6,7 @@ from pkg_resources import resource_string
 # https://pythonhosted.org/setuptools/setuptools.html#id7
 setup(
     name='Chessnut',
-    version='0.2.7',
+    version='0.2.8',
     packages=['Chessnut'],
 
     author="Chris Gearhart",
