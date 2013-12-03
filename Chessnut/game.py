@@ -233,7 +233,7 @@ class Game(object):
         for end in ray:
 
             sym = piece.lower()
-            del_x = (end - start) % 8
+            del_x = abs(end - start) % 8
             move = [Game.i2xy(start) + Game.i2xy(end)]
             tgt_owner = self.board.get_owner(end)
 
@@ -242,10 +242,10 @@ class Game(object):
                 break
 
             # Test castling exception for king
-            elif sym == 'k' and del_x == 2:
-                rights = {62: 'K', 58: 'Q', 6: 'k', 2: 'q'}.get(end, '')
-                mid_p = self.board.get_piece((start + end) // 2)
-                if rights not in self.state.rights or not mid_p.isspace():
+            if sym == 'k' and del_x == 2:
+                mid_p = self.board.get_piece((start + end) // 2).isspace()
+                rights = {62: 'K', 58: 'Q', 6: 'k', 2: 'q'}.get(end, ' ')
+                if tgt_owner or not mid_p or rights not in self.state.rights:
                     # Abort castling because missing castling rights
                     # or piece in the way
                     break

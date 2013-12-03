@@ -63,6 +63,14 @@ class GameTest(unittest.TestCase):
         self.game = Game(fen=fen)
         self.assertEqual(self.game.get_moves(), [])
 
+        # castling into occupied space & king moving into check
+        fen = '8/2p5/5p2/7r/7P/3R1P2/P3R1P1/2k1K3 b - - 13 46'
+        self.game = Game(fen=fen)
+        self.assertIn('c7c6', self.game.get_moves())
+        fen = '8/8/2p2p2/7r/7P/3R1P2/P3R1P1/2k1K3 w - - 0 47'
+        self.game = Game(fen=fen, validate=False)
+        self.assertNotIn('e1c1', self.game.get_moves())
+
     def test_apply_move(self):
         # pawn promotion
         fen = '3qk1b1/P7/8/8/8/8/7P/4K3 w - - 0 1'
