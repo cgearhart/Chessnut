@@ -128,10 +128,7 @@ class Game(object):
                                                                    str(self)))
 
         # toggle the active player
-        if self.state.player == 'w':
-            fields[0] = 'b'
-        elif self.state.player == 'b':
-            fields[0] = 'w'
+        fields[0] = {'w': 'b', 'b': 'w'}[self.state.player]
 
         # modify castling rights - the set of castling rights that *might*
         # be voided by a move is uniquely determined by the starting index
@@ -284,23 +281,25 @@ class Game(object):
                     # or piece in the way
                     break
 
-            # Test en passant exception for pawn
-            if sym == 'p' and del_x != 0 and not tgt_owner:
-                ep_coords = self.state.en_passant
-                if ep_coords == '-' or end != Game.xy2i(ep_coords):
+            if sym == 'p':
+                # Pawns cannot move forward to a non-empty square
+                if del_x == 0 and tgt_owner:
                     break
 
-            # Pawns cannot move forward to a non-empty square
-            elif tgt_owner and sym == 'p' and del_x == 0:
-                break
+                # Test en passant exception for pawn
+                elif del_x != 0 and not tgt_owner:
+                    ep_coords = self.state.en_passant
+                    if ep_coords == '-' or end != Game.xy2i(ep_coords):
+                        break
 
-            # Pawn promotions should list all possible promotions
-            if piece.lower() == 'p' and (end < 8 or end > 55):
-                move = [move[0] + s for s in ['b', 'n', 'r', 'q']]
+                # Pawn promotions should list all possible promotions
+                if (end < 8 or end > 55):
+                    move = [move[0] + s for s in ['b', 'n', 'r', 'q']]
 
             res_moves.extend(move)
 
-            # Cannot continue beyond capturing an enemy piece
+            # break after capturing an enemy piece
             if tgt_owner:
                 break
+
         return res_moves
