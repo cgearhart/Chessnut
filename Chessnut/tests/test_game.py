@@ -116,6 +116,13 @@ class GameTest(unittest.TestCase):
         self.game.apply_move('e8c8')
         self.assertEqual(str(self.game), new_fen)
 
+        # Disable castling on capture
+        fen = '1r2k2r/3nb1Qp/p1pp4/3p4/3P4/P1N2P2/1PP3PP/R1B3K1 w k - 0 22'
+        new_fen = '1r2k2Q/3nb2p/p1pp4/3p4/3P4/P1N2P2/1PP3PP/R1B3K1 b - - 0 22'
+        self.game = Game(fen=fen)
+        self.game.apply_move('g7h8')
+        self.assertEqual(str(self.game), new_fen)
+
         # white en passant
         fen = 'rnbqkbnr/ppp2ppp/4p3/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 1'
         self.game = Game(fen=fen)

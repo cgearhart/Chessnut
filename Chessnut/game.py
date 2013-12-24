@@ -134,8 +134,10 @@ class Game(object):
         # be voided by a move is uniquely determined by the starting index
         # of the move - regardless of what piece moves from that position
         # (excluding chess variants like chess960).
-        void_set = {0: 'q', 4: 'kq', 7: 'k',
-                    56: 'Q', 60: 'KQ', 63: 'K'}.get(start, '')
+        rights_map = {0: 'q', 4: 'kq', 7: 'k',
+                      56: 'Q', 60: 'KQ', 63: 'K'}
+        void_set = ''.join([rights_map.get(start, ''),
+                           rights_map.get(end, '')])
         new_rights = [r for r in self.state.rights if r not in void_set]
         fields[1] = ''.join(new_rights) or '-'
 
@@ -219,7 +221,7 @@ class Game(object):
 
     def _all_moves(self, player=None, idx_list=xrange(64)):
         """
-        Get a list containing all legal moves for pieces owned by the
+        Get a list containing all reachable moves for pieces owned by the
         specified player (including moves that would expose the player's king
         to check) that are located at positions included in the idx_list. By
         default, it compiles the list for the active player (i.e.,
