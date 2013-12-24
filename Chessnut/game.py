@@ -196,6 +196,9 @@ class Game(object):
         if not self.validate:
             return self._all_moves(player=player, idx_list=idx_list)
 
+        if not player:
+            player = self.state.player
+
         res_moves = []
 
         # This is the most inefficient part of the model - there is no cache
@@ -204,19 +207,32 @@ class Game(object):
         # away the result at the end of each pass through the loop
         test_board = Game(fen=str(self), validate=False)
         for move in self._all_moves(player=player, idx_list=idx_list):
+
             test_board.reset(fen=str(self))
+
+            # Don't allow castling out of or through the king in check
+            k_sym, opp = {'w': ('K', 'b'), 'b': ('k', 'w')}.get(player)
+            op_moves = set([m[2:4] for m in test_board.get_moves(player=opp)])
+            castle_gap = {'e1g1': 'e1f1', 'e1c1': 'e1d1',
+                          'e8g8': 'e8f8', 'e8c8': 'e8d8'}.get(move, '')
+            if (Game.i2xy(self.board.find_piece(k_sym)) in op_moves or
+                    castle_gap and castle_gap not in res_moves):
+                continue
+
+            # Apply the move to the test board to ensure that the king does
+            # not end up in check
             test_board.apply_move(move)
-
-            # a move is legal unless the opponent can attack the king at the
-            # end of a move
-            k_idx = [x for x in xrange(64)
-                     if test_board.board.get_piece(x).lower() == 'k'
-                     and test_board.board.get_owner(x) == self.state.player]
-
             tgts = set([m[2:4] for m in test_board.get_moves()])
 
-            if Game.i2xy(k_idx[0]) not in tgts:
+            # print move
+            # print res_moves
+            # print test_board
+            # print tgts
+            # print ''
+
+            if Game.i2xy(test_board.board.find_piece(k_sym)) not in tgts:
                 res_moves.append(move)
+
         return res_moves
 
     def _all_moves(self, player=None, idx_list=xrange(64)):

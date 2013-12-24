@@ -71,6 +71,17 @@ class GameTest(unittest.TestCase):
         self.game = Game(fen=fen, validate=False)
         self.assertNotIn('e1c1', self.game.get_moves())
 
+        # castling through check
+        fen = 'r3k2r/8/8/8/8/8/8/3RKR2 b kq - 0 1'
+        self.game = Game(fen=fen)
+        self.assertNotIn('e8c8', self.game.get_moves(idx_list=[4]))
+        self.assertNotIn('e8g8', self.game.get_moves(idx_list=[4]))
+
+        # castling out of check
+        fen = 'r3rk2/8/8/8/8/8/8/R3K2R w KQ - 0 1'
+        self.game = Game(fen=fen)
+        self.assertNotIn('e1c8', self.game.get_moves(idx_list=[60]))
+
     def test_apply_move(self):
         # pawn promotion
         fen = '3qk1b1/P7/8/8/8/8/7P/4K3 w - - 0 1'

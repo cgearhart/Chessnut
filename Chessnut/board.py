@@ -70,3 +70,10 @@ class Board(object):
         """
         self._position[end] = piece
         self._position[start] = ' '
+
+    def find_piece(self, symbol):
+        """
+        Find the index of the specified piece on the board, returns -1 if the
+        piece is not on the board.
+        """
+        return ''.join(self._position).find(symbol)
