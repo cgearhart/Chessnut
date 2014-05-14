@@ -212,23 +212,19 @@ class Game(object):
 
             # Don't allow castling out of or through the king in check
             k_sym, opp = {'w': ('K', 'b'), 'b': ('k', 'w')}.get(player)
+            k_loc = Game.i2xy(self.board.find_piece(k_sym))
             op_moves = set([m[2:4] for m in test_board.get_moves(player=opp)])
             castle_gap = {'e1g1': 'e1f1', 'e1c1': 'e1d1',
                           'e8g8': 'e8f8', 'e8c8': 'e8d8'}.get(move, '')
-            if (Game.i2xy(self.board.find_piece(k_sym)) in op_moves or
-                    castle_gap and castle_gap not in res_moves):
+            if (k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and
+                    (k_loc in op_moves or castle_gap
+                        and castle_gap not in res_moves)):
                 continue
 
             # Apply the move to the test board to ensure that the king does
             # not end up in check
             test_board.apply_move(move)
             tgts = set([m[2:4] for m in test_board.get_moves()])
-
-            # print move
-            # print res_moves
-            # print test_board
-            # print tgts
-            # print ''
 
             if Game.i2xy(test_board.board.find_piece(k_sym)) not in tgts:
                 res_moves.append(move)
