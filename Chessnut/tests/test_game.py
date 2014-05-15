@@ -1,6 +1,6 @@
 
 import unittest
-from Chessnut.game import Game, InvalidMove
+from Chessnut.game import Game, InvalidMove, DEFAULT_FEN
 
 
 # Default FEN string
@@ -16,146 +16,156 @@ ALG_POS = set(chr(l) + str(x) for x in range(1, 9) for l in range(97, 105))
 IDX_POS = set(range(64))
 
 
-class GameTest(unittest.TestCase):
+class DefaultGameTest(unittest.TestCase):
 
     def setUp(self):
         self.game = Game()
 
-    def test_i2xy(self):
-        for idx in xrange(64):
-            self.assertIn(Game.i2xy(idx), ALG_POS)
-
-    def test_xy2i(self):
-        for pos in ALG_POS:
-            self.assertIn(Game.xy2i(pos), IDX_POS)
-
-    def test_str(self):
-        self.game.reset()  # reset board to starting position
-        self.assertEqual(str(self.game), START_POS)
-
-    def test_fen_history(self):
-        self.game.reset()
-        self.assertEqual(self.game.fen_history, [START_POS])
-        self.game.apply_move('e2e4')
-        hist = [START_POS,
-                'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1']
-        self.assertEqual(self.game.fen_history, hist)
-
-    def test_move_history(self):
-        self.game = None
-        self.game = Game()
-        self.assertEqual(self.game.move_history, [])
-        self.game.apply_move('e2e4')
-        self.assertEqual(self.game.move_history, ['e2e4'])
+    def test_fen(self):
+        self.assertEqual(self.game.fen, DEFAULT_FEN)
 
     def test_get_moves(self):
         # legal openings
-        self.game.reset()
-        self.assertEqual(sorted(self.game.get_moves()), LEGAL_OPENINGS)
+        game = Game()
+        self.assertEqual(sorted(game.get_moves()), LEGAL_OPENINGS)
 
-        # en passant
-        fen = 'rnbqkbnr/ppp2ppp/4p3/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 1'
-        self.game = Game(fen=fen)
-        self.assertEqual(self.game.get_moves(idx_list=[28]), ['e5d6'])
+    def test_history(self):
+        game = Game()
+        self.assertEqual(game.history, [(DEFAULT_FEN, '')])
+        game.apply_move('e2e4')
+        self.assertTrue(len(game.history) == 2)
+
+    # def test_apply_move(self):
+
+
+    #     # apply moves
+    #     game.apply_move('g8h7')
+    #     self.assertEqual(str(game), 'Q2qk3/7b/8/8/8/8/7P/4K3 w - - 1 2')
+    #     game.apply_move('h2h4')
+    #     self.assertEqual(str(game), 'Q2qk3/7b/8/8/7P/8/8/4K3 b - h3 0 2')
+
+    #     # block vector tail with capture
+    #     moves = ['d8c8', 'd8b8', 'd8a8', 'e8f8', 'e8d7', 'e8e7', 'e8f7',
+    #              'g8f7', 'g8e6', 'g8d5', 'g8c4', 'g8b3', 'g8a2', 'g8h7']
+    #     game.reset(fen='Q2qk1b1/8/8/8/8/8/7P/4K3 b - - 0 1')
+    #     self.assertEqual(game.get_moves(), moves)
+    #     game.apply_move('d8b8')
+    #     moves = set(game.get_moves())
+    #     self.assertIn('a8b8', moves)
+    #     self.assertNotIn('a8c8', moves)
+
+    #     # capture
+    #     fen = 'r2q1rk1/pppbbppp/2n5/3p4/3PN3/4PN2/1PPBBPPP/R2Q1RK1 b - - 0 9'
+    #     game = Game(fen=fen)
+    #     game.apply_move('d5e4')
+    #     n_fen = 'r2q1rk1/pppbbppp/2n5/8/3Pp3/4PN2/1PPBBPPP/R2Q1RK1 w - - 0 10'
+    #     self.assertEqual(str(game), n_fen)
+
+    #     # invalid move
+    #     game = Game()
+    #     with self.assertRaises(InvalidMove):
+    #         game.apply_move('e2e2')
+
+class GameStatusTest(GameTest):
+    
+    def testStatus(self):
+        # normal
+        game = Game()
+        self.assertTrue(game.status == Game.NORMAL)
+
+        # check
+        fen = ''
+        game.set_fen()
+        self.assertTrue(game.status == Game.CHECK)
 
         # checkmate
         fen = '8/p5kp/1p6/2p5/P5P1/2n4P/r2p4/1K6 w - - 2 37'
-        self.game = Game(fen=fen)
-        self.assertEqual(self.game.get_moves(), [])
+        game.set_fen()
+        self.assertTrue(game.status == Game.CHECKMATE)
 
-        # castling into occupied space & king moving into check
-        fen = '8/2p5/5p2/7r/7P/3R1P2/P3R1P1/2k1K3 b - - 13 46'
-        self.game = Game(fen=fen)
-        self.assertIn('c7c6', self.game.get_moves())
-        fen = '8/8/2p2p2/7r/7P/3R1P2/P3R1P1/2k1K3 w - - 0 47'
-        self.game = Game(fen=fen, validate=False)
-        self.assertNotIn('e1c1', self.game.get_moves())
+        # stalemate
+        fen = ''
+        game.set_fen()
+        self.assertTrue(game.status == Game.STALEMATE)
 
-        # castling through check
-        fen = 'r3k2r/8/8/8/8/8/8/3RKR2 b kq - 0 1'
-        self.game = Game(fen=fen)
-        self.assertNotIn('e8c8', self.game.get_moves(idx_list=[4]))
-        self.assertNotIn('e8g8', self.game.get_moves(idx_list=[4]))
 
-        # castling out of check
-        fen = 'r3rk2/8/8/8/8/8/8/R3K2R w KQ - 0 1'
-        self.game = Game(fen=fen)
-        self.assertNotIn('e1c8', self.game.get_moves(idx_list=[60]))
+class CastlingTest(GameTest):
 
-    def test_apply_move(self):
-        # pawn promotion
-        fen = '3qk1b1/P7/8/8/8/8/7P/4K3 w - - 0 1'
-        self.game = Game(fen=fen)
-        self.game.apply_move('a7a8q')
-        self.assertEqual(str(self.game), 'Q2qk1b1/8/8/8/8/8/7P/4K3 b - - 0 1')
+    #     # white castling
+    #     fen = 'r3k2r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R3K2R w KQkq - 0 7'
+    #     new_fen = 'r3k2r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R4RK1 b kq - 1 7'
+    #     game = Game(fen=fen)
+    #     game.apply_move('e1g1')
+    #     self.assertEqual(str(game), new_fen)
+    #     new_fen = 'r3k2r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/2KR3R b kq - 1 7'
+    #     game = Game(fen=fen)
+    #     game.apply_move('e1c1')
+    #     self.assertEqual(str(game), new_fen)
 
-        # apply moves
-        self.game.apply_move('g8h7')
-        self.assertEqual(str(self.game), 'Q2qk3/7b/8/8/8/8/7P/4K3 w - - 1 2')
-        self.game.apply_move('h2h4')
-        self.assertEqual(str(self.game), 'Q2qk3/7b/8/8/7P/8/8/4K3 b - h3 0 2')
+    #     # black castling
+    #     fen = 'r3k2r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R3K2R b KQkq - 0 7'
+    #     new_fen = 'r4rk1/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R3K2R w KQ - 1 8'
+    #     game = Game(fen=fen)
+    #     game.apply_move('e8g8')
+    #     self.assertEqual(str(game), new_fen)
+    #     new_fen = '2kr3r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R3K2R w KQ - 1 8'
+    #     game = Game(fen=fen)
+    #     game.apply_move('e8c8')
+    #     self.assertEqual(str(game), new_fen)
 
-        # block vector tail with capture
-        moves = ['d8c8', 'd8b8', 'd8a8', 'e8f8', 'e8d7', 'e8e7', 'e8f7',
-                 'g8f7', 'g8e6', 'g8d5', 'g8c4', 'g8b3', 'g8a2', 'g8h7']
-        self.game.reset(fen='Q2qk1b1/8/8/8/8/8/7P/4K3 b - - 0 1')
-        self.assertEqual(self.game.get_moves(), moves)
-        self.game.apply_move('d8b8')
-        moves = set(self.game.get_moves())
-        self.assertIn('a8b8', moves)
-        self.assertNotIn('a8c8', moves)
+    #     # Disable castling on capture
+    #     fen = '1r2k2r/3nb1Qp/p1pp4/3p4/3P4/P1N2P2/1PP3PP/R1B3K1 w k - 0 22'
+    #     new_fen = '1r2k2Q/3nb2p/p1pp4/3p4/3P4/P1N2P2/1PP3PP/R1B3K1 b - - 0 22'
+    #     game = Game(fen=fen)
+    #     game.apply_move('g7h8')
+    #     self.assertEqual(str(game), new_fen)
 
-        # white castling
-        fen = 'r3k2r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R3K2R w KQkq - 0 7'
-        new_fen = 'r3k2r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R4RK1 b kq - 1 7'
-        self.game = Game(fen=fen)
-        self.game.apply_move('e1g1')
-        self.assertEqual(str(self.game), new_fen)
-        new_fen = 'r3k2r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/2KR3R b kq - 1 7'
-        self.game = Game(fen=fen)
-        self.game.apply_move('e1c1')
-        self.assertEqual(str(self.game), new_fen)
+    #     # castling into occupied space & king moving into check
+    #     fen = '8/2p5/5p2/7r/7P/3R1P2/P3R1P1/2k1K3 b - - 13 46'
+    #     game = Game(fen=fen)
+    #     self.assertIn('c7c6', game.get_moves())
+    #     fen = '8/8/2p2p2/7r/7P/3R1P2/P3R1P1/2k1K3 w - - 0 47'
+    #     game = Game(fen=fen)
+    #     self.assertNotIn('e1c1', game.get_moves())
 
-        # black castling
-        fen = 'r3k2r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R3K2R b KQkq - 0 7'
-        new_fen = 'r4rk1/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R3K2R w KQ - 1 8'
-        self.game = Game(fen=fen)
-        self.game.apply_move('e8g8')
-        self.assertEqual(str(self.game), new_fen)
-        new_fen = '2kr3r/pppqbppp/3pb3/8/8/3PB3/PPPQBPPP/R3K2R w KQ - 1 8'
-        self.game = Game(fen=fen)
-        self.game.apply_move('e8c8')
-        self.assertEqual(str(self.game), new_fen)
+    #     # castling through check
+    #     fen = 'r3k2r/8/8/8/8/8/8/3RKR2 b kq - 0 1'
+    #     game = Game(fen=fen)
+    #     self.assertNotIn('e8c8', game.get_moves(idx_list=[4]))
+    #     self.assertNotIn('e8g8', game.get_moves(idx_list=[4]))
 
-        # Disable castling on capture
-        fen = '1r2k2r/3nb1Qp/p1pp4/3p4/3P4/P1N2P2/1PP3PP/R1B3K1 w k - 0 22'
-        new_fen = '1r2k2Q/3nb2p/p1pp4/3p4/3P4/P1N2P2/1PP3PP/R1B3K1 b - - 0 22'
-        self.game = Game(fen=fen)
-        self.game.apply_move('g7h8')
-        self.assertEqual(str(self.game), new_fen)
+    #     # castling out of check
+    #     fen = 'r3rk2/8/8/8/8/8/8/R3K2R w KQ - 0 1'
+    #     game = Game(fen=fen)
+    #     self.assertNotIn('e1c8', game.get_moves(idx_list=[60]))
 
-        # white en passant
-        fen = 'rnbqkbnr/ppp2ppp/4p3/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 1'
-        self.game = Game(fen=fen)
-        self.game.apply_move('e5d6')
-        new_fen = 'rnbqkbnr/ppp2ppp/3Pp3/8/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1'
-        self.assertEqual(str(self.game), new_fen)
+class PawnMovesTest(GameTest):
 
-        # black en passant
-        fen = 'rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1'
-        self.game = Game(fen=fen)
-        self.game.apply_move('d4e3')
-        new_fen = 'rnbqkbnr/ppp1pppp/8/8/8/4p3/PPPP1PPP/RNBQKBNR w KQkq - 0 2'
-        self.assertEqual(str(self.game), new_fen)
+    def setUp(self):
+        pass
 
-        # capture
-        fen = 'r2q1rk1/pppbbppp/2n5/3p4/3PN3/4PN2/1PPBBPPP/R2Q1RK1 b - - 0 9'
-        self.game = Game(fen=fen)
-        self.game.apply_move('d5e4')
-        n_fen = 'r2q1rk1/pppbbppp/2n5/8/3Pp3/4PN2/1PPBBPPP/R2Q1RK1 w - - 0 10'
-        self.assertEqual(str(self.game), n_fen)
+#     # pawn promotion
+    #     fen = '3qk1b1/P7/8/8/8/8/7P/4K3 w - - 0 1'
+    #     game = Game(fen=fen)
+    #     game.apply_move('a7a8q')
+    #     self.assertEqual(str(game), 'Q2qk1b1/8/8/8/8/8/7P/4K3 b - - 0 1')
 
-        # invalid move
-        self.game.reset()
-        with self.assertRaises(InvalidMove):
-            self.game.apply_move('e2e2')
+    #     # en passant
+    #     fen = 'rnbqkbnr/ppp2ppp/4p3/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 1'
+    #     game = Game(fen=fen)
+    #     self.assertEqual(game.get_moves(idx_list=[28]), ['e5d6'])
+
+    #     # white en passant
+    #     fen = 'rnbqkbnr/ppp2ppp/4p3/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 1'
+    #     game = Game(fen=fen)
+    #     game.apply_move('e5d6')
+    #     new_fen = 'rnbqkbnr/ppp2ppp/3Pp3/8/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1'
+    #     self.assertEqual(str(game), new_fen)
+
+    #     # black en passant
+    #     fen = 'rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1'
+    #     game = Game(fen=fen)
+    #     game.apply_move('d4e3')
+    #     new_fen = 'rnbqkbnr/ppp1pppp/8/8/8/4p3/PPPP1PPP/RNBQKBNR w KQkq - 0 2'
+    #     self.assertEqual(str(game), new_fen)
+

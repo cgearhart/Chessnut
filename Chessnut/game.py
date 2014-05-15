@@ -1,320 +1,370 @@
-
+# pylint: disable=too-many-instance-attributes, star-args
 """
-The game module implements core Chessnut class, `Game`, to control a chess
-game.
-
-Two additional classes are defined: `InvalidMove` -- a subclass of the base
-`Exception` class, and `State` -- a namedtuple for handling game state
-information.
-
-Chessnut has neither an *engine*, nor a *GUI*, and it cannot currently
-handle any chess variants (e.g., Chess960) that are not equivalent to standard
-chess rules.
 """
 
-from collections import namedtuple
+from itertools import imap, chain, groupby
 
-from Chessnut.board import Board
-from Chessnut.moves import MOVES
+from Chessnut.moves import gen
 
-# Define a named tuple with FEN field names to hold game state information
-State = namedtuple('State', ['player', 'rights', 'en_passant', 'ply', 'turn'])
+
+# map starting index to voided castling rights
+RIGHTS = {60: 'KQ', 63: 'K', 56: 'Q', 4: 'kq', 0: 'q', 7: 'k'}
+
+# Define constants for default game setup and state values
+DEFAULT_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
+
+def a2i(pos):
+    """ Convert algebraic notation to board index """
+    return (8 - int(pos[1])) * 8 + (ord(pos[0]) - ord('a'))
+
+
+def i2a(idx):
+    """ Convert board index to algebraic notation """
+    return chr(97 + idx % 8) + str(8 - idx / 8)
 
 
 class InvalidMove(Exception):
-    """
-    Subclass base `Exception` so that exception handling doesn't have to
-    be generic.
-    """
+    """ Subclass base `Exception` to relay useful error messages """
     pass
 
 
 class Game(object):
-    """
-    This class manages a chess game instance -- it stores an internal
-    representation of the position of each piece on the board in an instance
-    of the `Board` class, and the additional state information in an instance
-    of the `State` namedtuple class.
-    """
+    """ """
 
-    default_fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+    # Game states
+    NORMAL = 0
+    CHECK = 1
+    CHECKMATE = 2
+    STALEMATE = 3
 
-    def __init__(self, fen=default_fen, validate=True):
-        """
-        Initialize the game board to the supplied FEN state (or the default
-        starting state if none is supplied), and determine whether to check
-        the validity of moves returned by `get_moves()`.
-        """
-        self.board = Board()
-        self.state = State(' ', ' ', ' ', ' ', ' ')
-        self.move_history = []
-        self.fen_history = []
-        self.validate = validate
-        self.set_fen(fen=fen)
+    # Graph definition
+    _nodes = [' '] * 64
+    _edges = [[[] for _ in range(8)] for _ in range(64)]  # edges out from x
+    _viewers = [set() for _ in range(64)]  # (idx, raynum) into node at x
 
-    def __str__(self):
-        """Return the current FEN representation of the game."""
-        return ' '.join(str(x) for x in [self.board] + list(self.state))
+    # chess game state information
+    _player = 1  # white
+    _rights = set('KQkq')
+    _ep = None
+    _ply = 0
+    _turn = 1
 
-    @staticmethod
-    def i2xy(pos_idx):
-        """
-        Convert a board index to algebraic notation.
-        """
-        return chr(97 + pos_idx % 8) + str(8 - pos_idx / 8)
+    # Game data bookkeeping for fast lookup
+    _status = NORMAL
+    _king_location = [None, None]
+    _edgemap = [gen(x) for x in range(64)]
+    __changes = set()
+    __fen_history = []
+    __move_history = []
 
-    @staticmethod
-    def xy2i(pos_xy):
-        """
-        Convert algebraic notation to board index.
-        """
-        return (8 - int(pos_xy[1])) * 8 + (ord(pos_xy[0]) - ord('a'))
+    def __init__(self, fen=DEFAULT_FEN):
+        self._set_fen(fen)
 
-    def set_fen(self, fen):
-        """
-        Parse a FEN string into components and store in the `board` and `state`
-        properties, and append the FEN string to the game history *without*
-        clearing it first.
-        """
-        self.fen_history.append(fen)
-        fields = fen.split(' ')
-        fields[4] = int(fields[4])
-        fields[5] = int(fields[5])
-        self.state = State(*fields[1:])
-        self.board.set_position(fields[0])
+    def _fen(self):
+        """ Convert the game information to a fen string """
+        ranks = []
+        for rank in imap(groupby, zip(*[iter(self._nodes)] * 8)):
+            tmp = [[len(list(g))] if e == ' ' else list(g) for e, g in rank]
+            ranks.append(''.join(str(x) for x in chain(*tmp)))
+        fen = ' '.join(['/'.join(ranks),
+                        'bw'[self._player],
+                        ''.join(x for x in 'KQkq' if x in self._rights) or '-',
+                        '-' if not self._ep else i2a(self._ep),
+                        str(self._ply),
+                        str(self._turn)])
+        return fen
 
-    def reset(self, fen=default_fen):
-        """
-        Clear the game history and set the board to the default starting
-        position.
-        """
-        self.move_history = []
-        self.fen_history = []
-        self.set_fen(fen)
+    @property
+    def fen(self):
+        """ Return the FEN string for the current board """
+        return self.__fen_history[-1]
 
-    # def _translate(self, move):
-        # """
-        # Translate FEN castling notation to simple algebraic move notation.
-        # """
-        # if move == 'O-O':
-        #     move = 'e1g1' if self.state.player == 'w' else 'e8g8'
-        # elif move == 'O-O-O':
-        #     move = 'e1c1' if self.state.player == 'w' else 'e8c8'
-        # return move
+    @property
+    def history(self):
+        """ List containing sequential position/move pairs """
+        return zip(self.__fen_history, self.__move_history + [''])
+
+    @property
+    def status(self):
+        """ Game status: NORMAL, CHECK, CHECKMATE, or STALEMATE """
+        return self._status
+
+    def _set_fen(self, fen_str):
+        """ Set game configuration to the specified fen & preserve history """
+        pos, _, state = fen_str.partition(' ')
+        self.__fen_history.append(fen_str)
+        self._set_state(state)
+
+        # place the pieces on the board by setting the name of each node
+        sym = [[' '] * int(p) if p.isdigit() else [p] for p in pos if p != '/']
+        for idx, token in enumerate(chain(*sym)):
+            self._modify(idx, token)
+
+        # update the moves for each node
+        self._update()
+
+    def _set_state(self, state):
+        """ Format the fields of the FEN state information to a game state """
+        fields = state.split(' ')
+        self._player = 'bw'.index(fields[0])
+        self._rights = set(fields[1])
+        self._ep = None if fields[2] == '-' else a2i(fields[2])
+        self._ply = int(fields[3])
+        self._turn = int(fields[4])
+
+    def _modify(self, idx, token):
+        """ Change the contents of a node and register for updates """
+        self._nodes[idx] = token
+        if token.lower() == "k":
+            self._king_location[token.isupper()] = idx
+        for rnum, ray in enumerate(self._edges[idx]):
+            for end in ray:
+                # stop watching node at 'end'
+                self._viewers[end].remove((idx, rnum))
+        self.__changes.update([(idx, i) for i in range(8)])
+        self.__changes.update(self._viewers[idx])
+
+    def _move(self, start, end):
+        """ Perform an unchecked move from start to end on the graph """
+        self._modify(end, self._nodes[start])
+        self._modify(start, ' ')
+
+    def undo(self):
+        """ Undo the last move applied to the board """
+        if self.__move_history:
+            self.__move_history.pop()
+            self.__fen_history.pop()  # pop the last then set to the previous
+            self._set_fen(self.__fen_history.pop())
 
     def apply_move(self, move):
         """
-        Take a move in simple algebraic notation and apply it to the game.
-        Note that simple algebraic notation differs from FEN move notation
-        in that castling is not given any special notation, and pawn promotion
-        piece is always lowercase.
+        Apply a move given in simple algebraic notation.
 
-        Update the state information (player, castling rights, en passant
-        target, ply, and turn), apply the move to the game board, and
-        update the game history.
+        NOTE: simple algebraic notation differs from FEN move notation.
+        Castling is not given any special notation, and pawn promotion piece
+        is always lowercase.
         """
 
-        # declare the status fields using default parameters
-        fields = ['w', 'KQkq', '-', 0, 1]
-        # move = self._translate(move)
+        # convert coords from algebraic notation to board index
+        idx = a2i(move[0:2])
+        end = a2i(move[2:4])
 
-        start = Game.xy2i(move[:2])
-        end = Game.xy2i(move[2:4])
-        piece = self.board.get_piece(start)
-        target = self.board.get_piece(end)
+        # verify the legality of the move before applying it
+        if move not in self._moves(indexes=[idx]):
+            raise InvalidMove(move + " is not valid for game: " + self.fen)
 
-        if self.validate and move not in self.get_moves(idx_list=[start]):
-            raise InvalidMove("\nIllegal move: {}\nfen: {}".format(move,
-                                                                   str(self)))
+        # grab the piece tokens
+        token = self._nodes[idx]
+        target = self._nodes[end]
+        sym = token.lower()
 
-        # toggle the active player
-        fields[0] = {'w': 'b', 'b': 'w'}[self.state.player]
+        # perform an unsafe move from idx to end vertex on the graph
+        self._move(idx, end)
 
-        # modify castling rights - the set of castling rights that *might*
-        # be voided by a move is uniquely determined by the starting index
-        # of the move - regardless of what piece moves from that position
-        # (excluding chess variants like chess960).
-        rights_map = {0: 'q', 4: 'kq', 7: 'k',
-                      56: 'Q', 60: 'KQ', 63: 'K'}
-        void_set = ''.join([rights_map.get(start, ''),
-                           rights_map.get(end, '')])
-        new_rights = [r for r in self.state.rights if r not in void_set]
-        fields[1] = ''.join(new_rights) or '-'
+        # always increment the ply count; reset for captures
+        self._ply = self._ply + 1
+        if target.lower() != ' ':
+            self._ply = 0
 
-        # set en passant target square when a pawn advances two spaces
-        if piece.lower() == 'p' and abs(start - end) == 16:
-            fields[2] = Game.i2xy((start + end) // 2)
+        # handle promotion and en passant for pawns
+        ep_idx = self._ep
+        self._ep = None  # clear the ep state on every move
+        if sym == "p":
+            self._ply = 0  # reset the ply count on pawn moves
 
-        # reset the half move counter when a pawn moves or is captured
-        fields[3] = self.state.ply + 1
-        if piece.lower() == 'p' or target.lower() != ' ':
-            fields[3] = 0
+            if len(move) == 5:
+                # replace the piece token at end for promotion
+                # (switch case of promoted piece for white)
+                new_piece = move[5].upper() if self._player else move[5]
+                self._modify(end, new_piece)
+            elif end == ep_idx:
+                # handle en passant capture
+                ep_tgt = idx + end % 8 - idx % 8  # idx +/- 1
+                self._modify(ep_tgt, " ")  # remove the ep target
+            elif abs(idx - end) == 16:
+                # set ep for next turn by setting state and updating ep viewers
+                self._ep = (idx + end) // 2
+                self._modify(self._ep, " ")
 
-        # Increment the turn counter when the next move is from white, i.e.,
-        # the current player is black
-        fields[4] = self.state.turn
-        if self.state.player == 'b':
-            fields[4] = self.state.turn + 1
+        # unsafely move the rook on castling moves; don't need to check _rights
+        # because it is already tested in .get_moves()
+        if sym == "k":
+            deltax = idx - end
+            offset = self._player * 56  # white player position offset
+            if deltax == 2:
+                self._move(offset, offset + 3)
+            elif deltax == -2:
+                self._move(offset + 7, offset + 5)
 
-        # check for pawn promotion
-        if len(move) == 5:
-            piece = move[4]
-            if self.state.player == 'w':
-                piece = piece.upper()
+        # update castling rights; must test start and end because opponent
+        # captures can eliminate castling rights
+        if sym == "k" or sym == "r" and self._rights:
+            self._rights.difference_update(RIGHTS.get(idx, ''))
+            self._rights.difference_update(RIGHTS.get(end, ''))
 
-        # record the move in the game history and apply it to the board
-        self.move_history.append(move)
-        self.board.move_piece(start, end, piece)
+        # update the remaining state information (player & turn)
+        self._player = self._player ^ 1
+        self._turn = self._turn + self._player
 
-        # move the rook to the other side of the king in case of castling
-        c_type = {62: 'K', 58: 'Q', 6: 'k', 2: 'q'}.get(end, None)
-        if piece.lower() == 'k' and c_type and c_type in self.state.rights:
-            coords = {'K': (63, 61), 'Q': (56, 59),
-                      'k': (7, 5), 'q': (0, 3)}[c_type]
-            r_piece = self.board.get_piece(coords[0])
-            self.board.move_piece(coords[0], coords[1], r_piece)
+        # update the history
+        self.__fen_history.append(self._fen())
+        self.__move_history.append(move)
 
-        # in en passant remove the piece that is captured
-        if piece.lower() == 'p' and self.state.en_passant != '-' \
-                and Game.xy2i(self.state.en_passant) == end:
-            ep_tgt = Game.xy2i(self.state.en_passant)
-            if ep_tgt < 24:
-                self.board.move_piece(end + 8, end + 8, ' ')
-            elif ep_tgt > 32:
-                self.board.move_piece(end - 8, end - 8, ' ')
+        # important that update happens after the state change
+        self._update()
 
-        # state update must happen after castling
-        self.set_fen(' '.join(str(x) for x in [self.board] + list(fields)))
+    def get_moves(self, indexes=range(64)):
+        """ The list of legal moves from each index for the active player """
+        return sorted(list(self._moves(indexes)))
 
-    def get_moves(self, player=None, idx_list=xrange(64)):
-        """
-        Get a list containing the legal moves for pieces owned by the
-        specified player that are located at positions included in the
-        idx_list. By default, it compiles the list for the active player
-        (i.e., self.state.player) by filtering the list of _all_moves() to
-        eliminate any that would expose the player's king to check.
-        """
-        if not self.validate:
-            return self._all_moves(player=player, idx_list=idx_list)
+    def _moves(self, indexes=range(64)):
+        """ Calculate the legal moves for the active player """
+        moves = set()
+        fmt = "{}{}{}".format
 
-        if not player:
-            player = self.state.player
+        for idx in indexes:
 
-        res_moves = []
-
-        # This is the most inefficient part of the model - there is no cache
-        # for previously computed move lists, so creating a new test board
-        # each time and applying the moves incurs high overhead, and throws
-        # away the result at the end of each pass through the loop
-        test_board = Game(fen=str(self), validate=False)
-        for move in self._all_moves(player=player, idx_list=idx_list):
-
-            test_board.reset(fen=str(self))
-
-            # Don't allow castling out of or through the king in check
-            k_sym, opp = {'w': ('K', 'b'), 'b': ('k', 'w')}.get(player)
-            k_loc = Game.i2xy(self.board.find_piece(k_sym))
-            op_moves = set([m[2:4] for m in test_board.get_moves(player=opp)])
-            castle_gap = {'e1g1': 'e1f1', 'e1c1': 'e1d1',
-                          'e8g8': 'e8f8', 'e8c8': 'e8d8'}.get(move, '')
-            if (k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and
-                    (k_loc in op_moves or castle_gap
-                        and castle_gap not in res_moves)):
+            token = self._nodes[idx]
+            if not token.strip() or not self._is_active(idx):
+                # skip the index if it is not the current player's piece
                 continue
 
-            # Apply the move to the test board to ensure that the king does
-            # not end up in check
-            test_board.apply_move(move)
-            tgts = set([m[2:4] for m in test_board.get_moves()])
-
-            if Game.i2xy(test_board.board.find_piece(k_sym)) not in tgts:
-                res_moves.append(move)
-
-        return res_moves
-
-    def _all_moves(self, player=None, idx_list=xrange(64)):
-        """
-        Get a list containing all reachable moves for pieces owned by the
-        specified player (including moves that would expose the player's king
-        to check) that are located at positions included in the idx_list. By
-        default, it compiles the list for the active player (i.e.,
-        self.state.player) by checking every square on the board.
-        """
-        res_moves = []
-        for start in idx_list:
-            if self.board.get_owner(start) != (player or self.state.player):
+            kdx = self._king_location[token.isupper()]
+            if not self._safe(' ', idx, kdx, idx):
+                # skip the index if lifting the piece exposes the king to check
                 continue
 
-            # MOVES contains the list of all possible moves for a piece of
-            # the specified type on an empty chess board.
-            piece = self.board.get_piece(start)
-            rays = MOVES.get(piece, [''] * 64)
+            start = i2a(idx)
+            for edge in chain(*self._edges[idx]):
+                end = i2a(edge)
 
-            for ray in rays[start]:
-                # Trace each of the 8 (or fewer) possible directions that a
-                # piece at the given starting index could move
+                if not self._safe(token, edge, kdx, kdx):
+                    # skip if king is exposed after token moves from idx->end
+                    continue
 
-                res_moves.extend(self._trace_ray(start, piece, ray))
+                if token.lower() == "p" and (edge < 8 or edge > 55):
+                    # insert the possible piece types for pawn promotions here
+                    # because they are the only moves with distinct notation
+                    promotions = ['b', 'n', 'q', 'r']
+                    moves.update([fmt(start, end, s) for s in promotions])
+                    continue
 
-        return res_moves
+                moves.add(fmt(start, end, ''))
 
-    def _trace_ray(self, start, piece, ray):
-        """
-        Return a list of moves by filtering the supplied ray (a list of
-        indices corresponding to end points that lie on a common line from
-        the starting index) based on the state of the chess board (e.g.,
-        castling, capturing, en passant, etc.). Moves are in simple algebraic
-        notation, e.g., 'a2a4', 'g7h8q', etc.
+        return moves
 
-        Each ray should be an element from Chessnut.MOVES, representing all
-        the moves that a piece could make from the starting square on an
-        otherwise blank chessboard. This function filters the moves in a ray
-        by enforcing the rules of chess for the legality of capturing pieces,
-        castling, en passant, and pawn promotion.
-        """
-        res_moves = []
+    def _update(self):
+        """ Update edges for nodes that have been marked as changed """
 
-        for end in ray:
+        changes = set()
 
-            sym = piece.lower()
-            del_x = abs(end - start) % 8
-            move = [Game.i2xy(start) + Game.i2xy(end)]
-            tgt_owner = self.board.get_owner(end)
+        while self.__changes:
 
-            # Abort if the current player owns the piece at the end point
-            if tgt_owner == self.state.player:
-                break
+            idx, rnum = self.__changes.pop()
+            self._edges[idx][rnum] = []
 
-            # Test castling exception for king
-            if sym == 'k' and del_x == 2:
-                gap_owner = self.board.get_owner((start + end) // 2)
-                out_owner = self.board.get_owner(end - 1)
-                rights = {62: 'K', 58: 'Q', 6: 'k', 2: 'q'}.get(end, ' ')
-                if (tgt_owner or gap_owner or rights not in self.state.rights
-                        or (rights.lower() == 'q' and out_owner)):
-                    # Abort castling because missing castling rights
-                    # or piece in the way
-                    break
+            ray = self._trace(idx, rnum)
+            if not ray:
+                continue
 
-            if sym == 'p':
-                # Pawns cannot move forward to a non-empty square
-                if del_x == 0 and tgt_owner:
-                    break
+            for end in ray:
+                # register as a viewer for notification of changes to 'end'
+                self._viewers[end].add((idx, rnum))
 
-                # Test en passant exception for pawn
-                elif del_x != 0 and not tgt_owner:
-                    ep_coords = self.state.en_passant
-                    if ep_coords == '-' or end != Game.xy2i(ep_coords):
-                        break
+            # filter pawn moves because they have different rules
+            token = self._nodes[idx]
+            target = self._nodes[ray[-1]]
+            is_blocked = target != ' '
+            is_capture = token.islower() != target.islower()
 
-                # Pawn promotions should list all possible promotions
-                if (end < 8 or end > 55):
-                    move = [move[0] + s for s in ['b', 'n', 'r', 'q']]
+            if token.lower() == 'p':
+                if ray[-1] == self._ep and 16 < idx < 40:
+                    # allow ep but mark it to be cleared on the next turn
+                    changes.add((idx, rnum))
+                elif rnum % 2 != (is_blocked and is_capture):
+                    # drop pawn moves to empty diagonal or full forward cells
+                    ray.pop()
+            elif is_blocked and not is_capture:
+                ray.pop()
 
-            res_moves.extend(move)
+            self._edges[idx][rnum] = ray
 
-            # break after capturing an enemy piece
-            if tgt_owner:
-                break
+        # Insert castling moves - it is not necessary to track through viewers
+        # list because the moves are updated every turn
+        if "K" in self._rights and self._can_castle((60, 'K'), (56, 'R'), 4):
+            self._edges[60][4] = [59, 58]
+        if "Q" in self._rights and self._can_castle((60, 'K'), (63, 'R'), 0):
+            self._edges[60][0] = [61, 62]
+        if "k" in self._rights and self._can_castle((4, 'k'), (0, 'r'), 4):
+            self._edges[4][4] = [3, 2]
+        if "q" in self._rights and self._can_castle((4, 'k'), (7, 'r'), 0):
+            self._edges[4][0] = [5, 6]
 
-        return res_moves
+        self.__changes = changes  # propagate en passant tracking
+        self._update_status()
+
+    def _safe(self, sym, idx, kdx, vdx):
+        """ True if sym at idx guards the piece at kdx from viewers of vdx """
+        # temporarily replace the piece at tdx
+        token = self._nodes[idx]
+        self._nodes[idx] = sym
+
+        # test to see whether the king is in check
+        for end, rnum in self._viewers[vdx]:
+            if self._nodes[end].isupper() != self._nodes[kdx].isupper():
+                ray = self._trace(end, rnum)
+                if ray and ray[-1] == kdx:
+                    self._nodes[idx] = token
+                    return False
+
+        # put the original piece back
+        self._nodes[idx] = token
+
+        return True
+
+    def _can_castle(self, kdata, rdata, ray):
+        """ Test castling rights conditions """
+        kdx, ksym = kdata
+        rdx, rsym = rdata
+        k_ok = self._nodes[kdx] == ksym and self._safe(ksym, kdx, kdx, kdx)
+        r_ok = self._nodes[rdx] == rsym
+        edx = kdx + 2 - ray  # where the king will end up
+        can_move = self._edges[kdx][ray] and self._safe(ksym, *[edx] * 3)
+        if k_ok and r_ok and can_move:
+            return True
+
+    def _trace(self, idx, rnum):
+        """ Return the first n unobstructed nodes in a ray """
+        token = self._nodes[idx].strip()
+        if not token:
+            return []
+
+        ray = self._edgemap[idx][token][rnum]
+
+        for edx, end in enumerate(ray):
+            if self._nodes[end].strip():
+                return ray[:edx + 1]
+
+        return ray
+
+    def _is_active(self, idx):
+        """ Test whether the piece at idx belongs to the active player """
+        token = self._nodes[idx].strip()
+        return token and token.isupper() == self._player
+
+    def _update_status(self):
+        """ Update the game status for check/checkmate/stalemate """
+
+        king_viewers = self._viewers[self._king_location[self._player]]
+        is_exposed = [True for i, _ in king_viewers if not self._is_active(i)]
+        edges = [e for i, e in enumerate(self._edges) if self._is_active(i)]
+        can_move = list(chain(*list(chain(*edges))))
+
+        self._status = Game.NORMAL
+        if is_exposed:
+            self._status = Game.CHECK
+            if not can_move:
+                self.status = Game.CHECKMATE
+        elif not can_move:
+            self._status = Game.STALEMATE
