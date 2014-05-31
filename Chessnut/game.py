@@ -175,7 +175,8 @@ class Game(object):
             self.board.move_piece(coords[0], coords[1], r_piece)
 
         # in en passant remove the piece that is captured
-        if piece.lower() == 'p' and self.state.en_passant != '-':
+        if piece.lower() == 'p' and self.state.en_passant != '-' \
+                and Game.xy2i(self.state.en_passant) == end:
             ep_tgt = Game.xy2i(self.state.en_passant)
             if ep_tgt < 24:
                 self.board.move_piece(end + 8, end + 8, ' ')
