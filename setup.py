@@ -9,7 +9,7 @@ if os.path.exists('README.txt'):
 # https://pythonhosted.org/setuptools/setuptools.html#id7
 setup(
     name='Chessnut',
-    version='0.2.12',
+    version='0.2.13',
     packages=['Chessnut'],
 
     author="Chris Gearhart",
