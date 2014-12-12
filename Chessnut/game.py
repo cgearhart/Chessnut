@@ -231,9 +231,6 @@ class Game(object):
                 continue
 
             kdx = self._king_location[token.isupper()]
-            if not self._safe(' ', idx, kdx, idx):
-                # skip the index if lifting the piece exposes the king to check
-                continue
 
             start = i2a(idx)
             for edge in chain(*self._edges[idx]):
