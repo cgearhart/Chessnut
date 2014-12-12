@@ -37,6 +37,11 @@ class Game(object):
     of the `State` namedtuple class.
     """
 
+    NORMAL = 0
+    CHECK = 1
+    CHECKMATE = 2
+    STALEMATE = 3
+
     default_fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
     def __init__(self, fen=default_fen, validate=True):
@@ -45,6 +50,7 @@ class Game(object):
         starting state if none is supplied), and determine whether to check
         the validity of moves returned by `get_moves()`.
         """
+        self._cache = {}
         self.board = Board()
         self.state = State(' ', ' ', ' ', ' ', ' ')
         self.move_history = []
@@ -76,6 +82,7 @@ class Game(object):
         properties, and append the FEN string to the game history *without*
         clearing it first.
         """
+        self._cache = {}
         self.fen_history.append(fen)
         fields = fen.split(' ')
         fields[4] = int(fields[4])
@@ -90,6 +97,7 @@ class Game(object):
         """
         self.move_history = []
         self.fen_history = []
+        self._cache = {}
         self.set_fen(fen)
 
     # def _translate(self, move):
@@ -202,6 +210,17 @@ class Game(object):
 
         res_moves = []
 
+        # cache computed moves for a single turn
+        if len(self.fen_history) and self.fen_history[-1] in self._cache:
+            mem_moves = self._cache[self.fen_history[-1]]
+            idx_list_tmp = []
+            for idx in idx_list:
+                if idx not in mem_moves:
+                    idx_list_tmp.append(idx)
+                else:
+                    res_moves.append(mem_moves[idx])
+            idx_list = idx_list_tmp
+
         # This is the most inefficient part of the model - there is no cache
         # for previously computed move lists, so creating a new test board
         # each time and applying the moves incurs high overhead, and throws
@@ -213,13 +232,15 @@ class Game(object):
 
             # Don't allow castling out of or through the king in check
             k_sym, opp = {'w': ('K', 'b'), 'b': ('k', 'w')}.get(player)
-            k_loc = Game.i2xy(self.board.find_piece(k_sym))
+            kdx = self.board.find_piece(k_sym)
+            k_loc = Game.i2xy(kdx)
             op_moves = set([m[2:4] for m in test_board.get_moves(player=opp)])
             castle_gap = {'e1g1': 'e1f1', 'e1c1': 'e1d1',
                           'e8g8': 'e8f8', 'e8c8': 'e8d8'}.get(move, '')
-            if (k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and
-                    (k_loc in op_moves or castle_gap
-                        and castle_gap not in res_moves)):
+            dx = abs(kdx - Game.xy2i(move[2:4]))
+            if k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and dx == 2 and \
+                    (k_loc in op_moves or castle_gap and
+                     castle_gap not in res_moves):
                 continue
 
             # Apply the move to the test board to ensure that the king does
@@ -240,9 +261,10 @@ class Game(object):
         default, it compiles the list for the active player (i.e.,
         self.state.player) by checking every square on the board.
         """
+        player = player or self.state.player
         res_moves = []
         for start in idx_list:
-            if self.board.get_owner(start) != (player or self.state.player):
+            if self.board.get_owner(start) != player:
                 continue
 
             # MOVES contains the list of all possible moves for a piece of
@@ -254,11 +276,13 @@ class Game(object):
                 # Trace each of the 8 (or fewer) possible directions that a
                 # piece at the given starting index could move
 
-                res_moves.extend(self._trace_ray(start, piece, ray))
+                new_moves = self._trace_ray(start, piece, ray, player)
+                self._cache[start] = new_moves  # not limited to active player
+                res_moves.extend(new_moves)
 
         return res_moves
 
-    def _trace_ray(self, start, piece, ray):
+    def _trace_ray(self, start, piece, ray, player):
         """
         Return a list of moves by filtering the supplied ray (a list of
         indices corresponding to end points that lie on a common line from
@@ -282,7 +306,7 @@ class Game(object):
             tgt_owner = self.board.get_owner(end)
 
             # Abort if the current player owns the piece at the end point
-            if tgt_owner == self.state.player:
+            if tgt_owner == player:
                 break
 
             # Test castling exception for king
@@ -318,3 +342,22 @@ class Game(object):
                 break
 
         return res_moves
+
+    @property
+    def status(self):
+
+        k_sym, opp = {'w': ('K', 'b'), 'b': ('k', 'w')}.get(self.state.player)
+        k_loc = Game.i2xy(self.board.find_piece(k_sym))
+        can_move = len(self.get_moves())
+        is_exposed = [m[2:] for m in self._all_moves(player=opp)
+                      if m[2:] == k_loc]
+
+        status = Game.NORMAL
+        if is_exposed:
+            status = Game.CHECK
+            if not can_move:
+                status = Game.CHECKMATE
+        elif not can_move:
+            status = Game.STALEMATE
+
+        return status

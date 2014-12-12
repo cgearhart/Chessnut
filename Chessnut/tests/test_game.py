@@ -159,3 +159,21 @@ class GameTest(unittest.TestCase):
         self.game.reset()
         with self.assertRaises(InvalidMove):
             self.game.apply_move('e2e2')
+
+    def test_status(self):
+
+        # NORMAL
+        game = Game()
+        self.assertEqual(game.status, Game.NORMAL)
+
+        # CHECK
+        game = Game(fen='r3rk2/8/8/8/8/8/8/R3K2R w KQ - 0 1')
+        self.assertEqual(game.status, game.CHECK)
+
+        # CHECKMATE
+        game = Game(fen='8/p5kp/1p6/2p5/P5P1/2n4P/r2p4/1K6 w - - 2 37')
+        self.assertEqual(game.status, Game.CHECKMATE)
+
+        # STALEMATE
+        game = Game(fen='8/8/8/8/8/7k/5q2/7K w - - 0 37')
+        self.assertEqual(game.status, Game.STALEMATE)
