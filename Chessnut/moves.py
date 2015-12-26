@@ -80,12 +80,12 @@ for sym, is_legal in PIECES.items():
 
     MOVES[sym] = list()
 
-    for idx in xrange(64):
+    for idx in range(64):
 
         # Initialize arrays for each of the 8 possible directions that a
         # piece could be moved; some of these will be empty and
         # removed later
-        MOVES[sym].append([list() for _ in xrange(8)])
+        MOVES[sym].append([list() for _ in range(8)])
 
         # Sorting the list of end points by distance from the starting
         # point ensures that the ouptut order is properly sorted
@@ -93,9 +93,9 @@ for sym, is_legal in PIECES.items():
 
             # Determine the row, change in column, and change in row
             # of the start/end point pair for move validation
-            y = 8 - idx / 8
+            y = 8 - idx // 8
             dx = (end % 8) - (idx % 8)
-            dy = (8 - end / 8) - y
+            dy = (8 - end // 8) - y
 
             if idx == end or not is_legal(y, dx, dy):
                 continue
@@ -125,7 +125,7 @@ MOVES['K'][60][4].append(58)
 
 # Directly add double-space pawn opening moves
 IDX = 0
-for i in xrange(8):
+for i in range(8):
     MOVES['p'][8 + i][IDX].append(24 + i)
     MOVES['P'][55 - i][IDX].append(39 - i)
     IDX = 1
