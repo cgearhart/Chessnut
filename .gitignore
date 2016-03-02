@@ -1,0 +1,9 @@
+# build artifacts
+build/
+dist/
+Chessnut.egg-info/
+
+# eclipse project files
+.project
+.pydevproject
+
