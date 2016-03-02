@@ -125,6 +125,11 @@ class Game(object):
         # declare the status fields using default parameters
         fields = ['w', 'KQkq', '-', 0, 1]
         # move = self._translate(move)
+        
+        # gracefully handle empty or incomplete moves 
+        if move is None or move == '' or len(move) < 4:
+            raise InvalidMove("\nIllegal move: {}\nfen: {}".format(move,
+                                                                   str(self)))
 
         start = Game.xy2i(move[:2])
         end = Game.xy2i(move[2:4])
