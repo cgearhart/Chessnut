@@ -131,6 +131,9 @@ class Game(object):
             raise InvalidMove("\nIllegal move: {}\nfen: {}".format(move,
                                                                    str(self)))
 
+        # convert to lower case to avoid casing issues
+        move = move.lower()
+        
         start = Game.xy2i(move[:2])
         end = Game.xy2i(move[2:4])
         piece = self.board.get_piece(start)
