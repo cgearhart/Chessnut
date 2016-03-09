@@ -246,9 +246,11 @@ class Game(object):
             castle_gap = {'e1g1': 'e1f1', 'e1c1': 'e1d1',
                           'e8g8': 'e8f8', 'e8c8': 'e8d8'}.get(move, '')
             dx = abs(kdx - Game.xy2i(move[2:4]))
-            if k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and dx == 2 and \
-                    (k_loc in op_moves or castle_gap and
-                     castle_gap not in res_moves):
+            is_castle_move = move[0:2] == k_loc # does the move involve king?
+            if is_castle_move and \
+                k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and dx == 2 and \
+                (k_loc in op_moves or castle_gap and
+                castle_gap not in res_moves):
                 continue
 
             # Apply the move to the test board to ensure that the king does
