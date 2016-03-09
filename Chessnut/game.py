@@ -260,14 +260,6 @@ class Game(object):
                 res_moves.append(move)
 
         return res_moves
-    
-    def get_fen(self):
-        """
-        Get the latest FEN string of the current game.
-        """
-        if self.fen_history == None or len(self.fen_history) == 0:
-            return None
-        return self.fen_history[len(self.fen_history)-1]
         
     def _all_moves(self, player=None, idx_list=range(64)):
         """
