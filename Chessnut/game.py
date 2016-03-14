@@ -125,7 +125,15 @@ class Game(object):
         # declare the status fields using default parameters
         fields = ['w', 'KQkq', '-', 0, 1]
         # move = self._translate(move)
+        
+        # gracefully handle empty or incomplete moves 
+        if move is None or move == '' or len(move) < 4:
+            raise InvalidMove("\nIllegal move: {}\nfen: {}".format(move,
+                                                                   str(self)))
 
+        # convert to lower case to avoid casing issues
+        move = move.lower()
+        
         start = Game.xy2i(move[:2])
         end = Game.xy2i(move[2:4])
         piece = self.board.get_piece(start)
@@ -238,9 +246,11 @@ class Game(object):
             castle_gap = {'e1g1': 'e1f1', 'e1c1': 'e1d1',
                           'e8g8': 'e8f8', 'e8c8': 'e8d8'}.get(move, '')
             dx = abs(kdx - Game.xy2i(move[2:4]))
-            if k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and dx == 2 and \
-                    (k_loc in op_moves or castle_gap and
-                     castle_gap not in res_moves):
+            is_castle_move = move[0:2] == k_loc # does the move involve king?
+            if is_castle_move and \
+                k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and dx == 2 and \
+                (k_loc in op_moves or castle_gap and
+                castle_gap not in res_moves):
                 continue
 
             # Apply the move to the test board to ensure that the king does
@@ -252,7 +262,7 @@ class Game(object):
                 res_moves.append(move)
 
         return res_moves
-
+        
     def _all_moves(self, player=None, idx_list=range(64)):
         """
         Get a list containing all reachable moves for pieces owned by the
