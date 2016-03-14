@@ -50,7 +50,6 @@ class Game(object):
         starting state if none is supplied), and determine whether to check
         the validity of moves returned by `get_moves()`.
         """
-        self._cache = {}
         self.board = Board()
         self.state = State(' ', ' ', ' ', ' ', ' ')
         self.move_history = []
@@ -88,7 +87,6 @@ class Game(object):
         properties, and append the FEN string to the game history *without*
         clearing it first.
         """
-        self._cache = {}
         self.fen_history.append(fen)
         fields = fen.split(' ')
         fields[4] = int(fields[4])
@@ -103,7 +101,6 @@ class Game(object):
         """
         self.move_history = []
         self.fen_history = []
-        self._cache = {}
         self.set_fen(fen)
 
     # def _translate(self, move):
@@ -224,17 +221,6 @@ class Game(object):
 
         res_moves = []
 
-        # cache computed moves for a single turn
-        if len(self.fen_history) and self.fen_history[-1] in self._cache:
-            mem_moves = self._cache[self.fen_history[-1]]
-            idx_list_tmp = []
-            for idx in idx_list:
-                if idx not in mem_moves:
-                    idx_list_tmp.append(idx)
-                else:
-                    res_moves.append(mem_moves[idx])
-            idx_list = idx_list_tmp
-
         # This is the most inefficient part of the model - there is no cache
         # for previously computed move lists, so creating a new test board
         # each time and applying the moves incurs high overhead, and throws
@@ -248,16 +234,20 @@ class Game(object):
             k_sym, opp = {'w': ('K', 'b'), 'b': ('k', 'w')}.get(player)
             kdx = self.board.find_piece(k_sym)
             k_loc = Game.i2xy(kdx)
-            op_moves = set([m[2:4] for m in test_board.get_moves(player=opp)])
-            castle_gap = {'e1g1': 'e1f1', 'e1c1': 'e1d1',
-                          'e8g8': 'e8f8', 'e8c8': 'e8d8'}.get(move, '')
             dx = abs(kdx - Game.xy2i(move[2:4]))
-            is_castle_move = move[0:2] == k_loc # does the move involve king?
-            if is_castle_move and \
-                k_loc in {'k': 'e8', 'K': 'e1'}.get(k_sym, '') and dx == 2 and \
-                (k_loc in op_moves or castle_gap and
-                castle_gap not in res_moves):
-                continue
+
+            if move[0:2] == k_loc and dx == 2:
+
+                op_moves = set([m[2:4] for m in test_board.get_moves(player=opp)])
+                castle_gap = {'e1g1': 'e1f1', 'e1c1': 'e1d1',
+                              'e8g8': 'e8f8', 'e8c8': 'e8d8'}.get(move, '')
+
+                # testing for castle gap in the move list depends on _all_moves()
+                # returning moves in order radiating away from each piece, so that
+                # king castling moves are always considered after verifying the king
+                # can legally move to the gap cell.
+                if (k_loc in op_moves or castle_gap and castle_gap not in res_moves):
+                    continue
 
             # Apply the move to the test board to ensure that the king does
             # not end up in check
@@ -268,15 +258,7 @@ class Game(object):
                 res_moves.append(move)
 
         return res_moves
-    
-    def get_fen(self):
-        """
-        Get the latest FEN string of the current game.
-        """
-        if self.fen_history == None or len(self.fen_history) == 0:
-            return None
-        return self.fen_history[len(self.fen_history)-1]
-        
+
     def _all_moves(self, player=None, idx_list=range(64)):
         """
         Get a list containing all reachable moves for pieces owned by the
@@ -301,7 +283,6 @@ class Game(object):
                 # piece at the given starting index could move
 
                 new_moves = self._trace_ray(start, piece, ray, player)
-                self._cache[start] = new_moves  # not limited to active player
                 res_moves.extend(new_moves)
 
         return res_moves

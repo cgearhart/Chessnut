@@ -82,6 +82,11 @@ class GameTest(unittest.TestCase):
         self.game = Game(fen=fen)
         self.assertNotIn('e1c8', self.game.get_moves(idx_list=[60]))
 
+        # Github Issue 9
+        fen = 'r3kb1r/p1p2pp1/2p4p/3Pp3/6b1/2P5/PP1NN2P/R2QK1q1 w Qkq - 0 16'
+        self.game = Game(fen=fen)
+        self.assertEqual(['d2f1', 'e2g1'], self.game.get_moves())
+
     def test_apply_move(self):
         # pawn promotion
         fen = '3qk1b1/P7/8/8/8/8/7P/4K3 w - - 0 1'
