@@ -76,6 +76,12 @@ class Game(object):
         """
         return (8 - int(pos_xy[1])) * 8 + (ord(pos_xy[0]) - ord('a'))
 
+    def get_fen(self):
+        """
+        Get the latest FEN string of the current game.
+        """
+        return ' '.join(str(x) for x in [self.board] + list(self.state))
+
     def set_fen(self, fen):
         """
         Parse a FEN string into components and store in the `board` and `state`
@@ -125,15 +131,15 @@ class Game(object):
         # declare the status fields using default parameters
         fields = ['w', 'KQkq', '-', 0, 1]
         # move = self._translate(move)
-        
-        # gracefully handle empty or incomplete moves 
+
+        # gracefully handle empty or incomplete moves
         if move is None or move == '' or len(move) < 4:
             raise InvalidMove("\nIllegal move: {}\nfen: {}".format(move,
                                                                    str(self)))
 
         # convert to lower case to avoid casing issues
         move = move.lower()
-        
+
         start = Game.xy2i(move[:2])
         end = Game.xy2i(move[2:4])
         piece = self.board.get_piece(start)
@@ -332,8 +338,8 @@ class Game(object):
                 gap_owner = self.board.get_owner((start + end) // 2)
                 out_owner = self.board.get_owner(end - 1)
                 rights = {62: 'K', 58: 'Q', 6: 'k', 2: 'q'}.get(end, ' ')
-                if (tgt_owner or gap_owner or rights not in self.state.rights
-                        or (rights.lower() == 'q' and out_owner)):
+                if (tgt_owner or gap_owner or rights not in self.state.rights or
+                        (rights.lower() == 'q' and out_owner)):
                     # Abort castling because missing castling rights
                     # or piece in the way
                     break
