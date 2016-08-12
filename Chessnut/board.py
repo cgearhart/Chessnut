@@ -41,7 +41,7 @@ class Board(object):
         """
         self._position = []
         for char in position:
-            if char is '/':  # skip row separator character
+            if char == '/':  # skip row separator character
                 continue
             elif char.isdigit():
                 # replace numbers characters with that number of spaces
