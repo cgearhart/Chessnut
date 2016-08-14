@@ -9,9 +9,8 @@ if os.path.exists('README.txt'):
 # https://pythonhosted.org/setuptools/setuptools.html#id7
 setup(
     name='Chessnut',
-    version='0.3.0',
+    version='0.3.1',
     packages=['Chessnut'],
-
     author="Chris Gearhart",
     author_email="chris@gearley.com",
     description="A basic chess model to imports/export FEN & finds moves.",
