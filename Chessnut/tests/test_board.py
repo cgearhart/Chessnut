@@ -25,3 +25,9 @@ class BoardTest(unittest.TestCase):
         self.board.move_piece(52, 36, 'P')  # e2e4
         self.assertEqual(str(self.board),
                          'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR')
+
+    def test_find_all_pieces(self):
+        self.board.set_position('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR')
+        self.assertEqual(self.board.find_all_pieces('P'), [48, 49, 50, 51, 52, 53, 54, 55])
+        self.assertEqual(self.board.find_all_pieces('R'), [56, 63])
+        self.assertEqual(self.board.find_all_pieces('r'), [0, 7])
