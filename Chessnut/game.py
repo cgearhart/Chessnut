@@ -12,6 +12,7 @@ handle any chess variants (e.g., Chess960) that are not equivalent to standard
 chess rules.
 """
 
+import re
 from collections import namedtuple
 
 from Chessnut.board import Board
@@ -205,6 +206,13 @@ class Game(object):
         # state update must happen after castling
         self.set_fen(' '.join(str(x) for x in [self.board] + list(fields)))
 
+    def apply_san_move(self, move):
+        """
+        Take a move in algebraic notation, e.g. Rac1, Nf3, Nbd7 and
+         make the move.
+        """
+        self.apply_move(self.san_to_long(move))
+
     def get_moves(self, player=None, idx_list=range(64)):
         """
         Get a list containing the legal moves for pieces owned by the
@@ -366,3 +374,76 @@ class Game(object):
             status = Game.STALEMATE
 
         return status
+
+    def san_to_long(self, san_str, verbose=False):
+        san = San(san_str)
+        if not san.end_square:
+            # Castling move, end square depends on player
+            if san.castling == 'K' and self.state.player == 'w':
+                san.end_square = 'g1'
+                san.from_hints = 'e1'
+            elif san.castling == 'Q' and self.state.player == 'w':
+                san.end_square = 'c1'
+                san.from_hints = 'e1'
+            elif san.castling == 'K' and self.state.player == 'b':
+                san.end_square = 'g8'
+                san.from_hints = 'e8'
+            elif san.castling == 'Q' and self.state.player == 'b':
+                san.end_square = 'c8'
+                san.from_hints = 'e8'
+
+        if len(san.from_hints) == 2:
+            return san.from_hints + san.end_square
+
+        if not san.piece:
+            san.piece = 'P'
+        if self.state.player == 'b':
+            san.piece = san.piece.lower()
+
+        start_squares = self.board.find_all_pieces(san.piece)
+        if len(start_squares) == 1:
+            return Game.i2xy(start_squares[0]) + san.end_square + san.promotion.lower()
+
+        # If there's more than one piece on the board of this type,
+        # we have to determine which ones have a legal move
+        rays = MOVES.get(san.piece, [''] * 64)
+
+        for square in start_squares:
+            if san.from_hints not in Game.i2xy(square):
+                continue
+
+            for ray in rays[square]:
+                moves = self._trace_ray(square, san.piece, ray, self.state.player)
+                for move in moves:
+                    if san.end_square == move[2:4] and (not san.promotion or san.promotion.lower() == move[-1]):
+                        # We found our move, we can just return it
+                        return move
+
+
+common_san_re = re.compile(r'([KQBNR]?)([a-h]?[1-8]?)x?([a-h][1-8])=?([QBNR])?\+{0,2}')
+
+
+class San(object):
+    """
+    Represents Short algebraic notation, eg. Bf5, Rc1, Nbd7
+    """
+    piece = ''
+    from_hints = ''
+    end_square = ''
+    promotion = ''
+    castling = ''
+
+    def __init__(self, san):
+        self.san = san
+        common_move = common_san_re.match(self.san)
+
+        if common_move:
+            self.piece = common_move.group(1) or ''
+            self.from_hints = common_move.group(2) or ''
+            self.end_square = common_move.group(3)
+            self.promotion = common_move.group(4) or ''
+
+        elif self.san.replace('-', '') in ('00', 'OO'):
+            self.castling = 'K'
+        elif self.san.replace('-', '') in ('000', 'OOO'):
+            self.castling = 'Q'

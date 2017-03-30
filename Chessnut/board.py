@@ -77,3 +77,10 @@ class Board(object):
         piece is not on the board.
         """
         return ''.join(self._position).find(symbol)
+
+    def find_all_pieces(self, symbol):
+        """
+        Find all indexes of the specified piece on the board, returns an empty list
+        if the piece is not on the board.
+        """
+        return [indx for indx, piece in enumerate(self._position) if piece == symbol]
