@@ -22,7 +22,7 @@ class GameTest(unittest.TestCase):
         self.game = Game()
 
     def test_i2xy(self):
-        for idx in xrange(64):
+        for idx in range(64):
             self.assertIn(Game.i2xy(idx), ALG_POS)
 
     def test_xy2i(self):

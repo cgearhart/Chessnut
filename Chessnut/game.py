@@ -205,7 +205,7 @@ class Game(object):
         # state update must happen after castling
         self.set_fen(' '.join(str(x) for x in [self.board] + list(fields)))
 
-    def get_moves(self, player=None, idx_list=range(64)):
+    def get_moves(self, player=None, idx_list=list(range(64))):
         """
         Get a list containing the legal moves for pieces owned by the
         specified player that are located at positions included in the
@@ -259,7 +259,7 @@ class Game(object):
 
         return res_moves
 
-    def _all_moves(self, player=None, idx_list=range(64)):
+    def _all_moves(self, player=None, idx_list=list(range(64))):
         """
         Get a list containing all reachable moves for pieces owned by the
         specified player (including moves that would expose the player's king
