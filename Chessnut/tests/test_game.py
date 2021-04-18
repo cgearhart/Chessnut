@@ -22,7 +22,7 @@ class GameTest(unittest.TestCase):
         self.game = Game()
 
     def test_i2xy(self):
-        for idx in xrange(64):
+        for idx in range(64):
             self.assertIn(Game.i2xy(idx), ALG_POS)
 
     def test_xy2i(self):
@@ -182,3 +182,10 @@ class GameTest(unittest.TestCase):
         # STALEMATE
         game = Game(fen='8/8/8/8/8/7k/5q2/7K w - - 0 37')
         self.assertEqual(game.status, Game.STALEMATE)
+
+    def test_last_line_pawn_check(self):
+        # If a pawn is able to expose a king on its last line
+        game = Game(fen='8/5b2/8/6P1/8/p7/1pk5/K7 w - - 0 51')
+        self.assertEqual(game.status, Game.CHECKMATE)
+        
+

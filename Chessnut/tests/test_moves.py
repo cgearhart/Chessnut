@@ -14,7 +14,7 @@ class MovesTest(unittest.TestCase):
             self.assertIn(piece, MOVES)
 
             # test that every starting position is in the dictionary
-            for idx in xrange(64):
+            for idx in range(64):
                 self.assertIsNotNone(MOVES[piece][idx])
 
                 # test ordering of moves in each ray (should radiate out

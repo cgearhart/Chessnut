@@ -354,8 +354,8 @@ class Game(object):
         k_sym, opp = {'w': ('K', 'b'), 'b': ('k', 'w')}.get(self.state.player)
         k_loc = Game.i2xy(self.board.find_piece(k_sym))
         can_move = len(self.get_moves())
-        is_exposed = [m[2:] for m in self._all_moves(player=opp)
-                      if m[2:] == k_loc]
+        is_exposed = [m[2:4] for m in self._all_moves(player=opp)
+                      if m[2:4] == k_loc]
 
         status = Game.NORMAL
         if is_exposed:
