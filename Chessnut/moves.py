@@ -76,7 +76,7 @@ PIECES = {'k': lambda y, dx, dy: abs(dx) <= 1 and abs(dy) <= 1,
 
 MOVES = dict()
 
-for sym, is_legal in PIECES.items():
+for sym, is_legal in list(PIECES.items()):
 
     MOVES[sym] = list()
 
@@ -89,7 +89,7 @@ for sym, is_legal in PIECES.items():
 
         # Sorting the list of end points by distance from the starting
         # point ensures that the ouptut order is properly sorted
-        for end in sorted(range(64), key=lambda x: abs(x - idx)):
+        for end in sorted(list(range(64)), key=lambda x: abs(x - idx)):
 
             # Determine the row, change in column, and change in row
             # of the start/end point pair for move validation
